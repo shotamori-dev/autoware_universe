@@ -119,6 +119,36 @@ void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
     state_(IDX::VX) = 0.0;
   }
 
+  const auto apply_hsa_stop = [&]() {
+    state_(IDX::VX) = 0.0;
+    state_(IDX::X) = prev_state(IDX::X);
+    state_(IDX::Y) = prev_state(IDX::Y);
+    state_(IDX::YAW) = prev_state(IDX::YAW);
+  };
+
+  using autoware_vehicle_msgs::msg::GearCommand;
+  const auto gear = delayed_input(IDX_U::GEAR);
+
+  if (
+    gear == GearCommand::DRIVE || gear == GearCommand::DRIVE_2 || gear == GearCommand::DRIVE_3 ||
+    gear == GearCommand::DRIVE_4 || gear == GearCommand::DRIVE_5 || gear == GearCommand::DRIVE_6 ||
+    gear == GearCommand::DRIVE_7 || gear == GearCommand::DRIVE_8 || gear == GearCommand::DRIVE_9 ||
+    gear == GearCommand::DRIVE_10 || gear == GearCommand::DRIVE_11 ||
+    gear == GearCommand::DRIVE_12 || gear == GearCommand::DRIVE_13 ||
+    gear == GearCommand::DRIVE_14 || gear == GearCommand::DRIVE_15 ||
+    gear == GearCommand::DRIVE_16 || gear == GearCommand::DRIVE_17 ||
+    gear == GearCommand::DRIVE_18 || gear == GearCommand::LOW || gear == GearCommand::LOW_2) {
+    if (state_(IDX::VX) < 0.0) { // Dギアなのに後ろに下がろうとしている
+      apply_hsa_stop();
+    }
+  } else if (gear == GearCommand::REVERSE || gear == GearCommand::REVERSE_2) {
+    if (state_(IDX::VX) > 0.0) { // Rギアなのに前に転がろうとしている
+      apply_hsa_stop();
+    }
+  } else if (gear == GearCommand::PARK) {
+    apply_hsa_stop(); // Pギアの時は動かさない
+  }
+
   state_(IDX::ACCX) = (state_(IDX::VX) - prev_state(IDX::VX)) / dt;
 }
 
