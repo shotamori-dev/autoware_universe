@@ -23,6 +23,7 @@
 #include <deque>
 #include <iostream>
 #include <queue>
+#include <random>
 
 namespace autoware::simulator::simple_planning_simulator
 {
@@ -50,6 +51,10 @@ public:
    * @param [in] steer_time_constant time constant for 1D model of steering dynamics
    * @param [in] steer_dead_band dead band for steering angle [rad]
    * @param [in] steer_bias steering bias [rad]
+   * @param [in] vel_sensor_delay time delay for velocity sensor [s]
+   * @param [in] vel_resolution resolution (step size) for velocity sensor [m/s]
+   * @param [in] vel_noise_stddev standard deviation of velocity sensor noise [m/s]
+   * @param [in] vel_noise_seed random seed for velocity noise to ensure reproducibility
    * @param [in] debug_acc_scaling_factor scaling factor for accel command
    * @param [in] debug_steer_scaling_factor scaling factor for steering command
    */
@@ -58,6 +63,7 @@ public:
     double dt, double acc_delay, double brake_delay, double acc_time_constant, double brake_time_constant,
     double brake_accuracy_error, double brake_hysteresis_width, double brake_jump_threshold, double brake_jump_value, double brake_resolution,
     double steer_delay, double steer_time_constant, double steer_dead_band, double steer_bias,
+    double vel_sensor_delay, double vel_resolution, double vel_noise_stddev, int vel_noise_seed,
     double debug_acc_scaling_factor, double debug_steer_scaling_factor);
 
   /**
@@ -101,10 +107,18 @@ private:
   const double steer_time_constant_;         //!< @brief time constant for steering dynamics
   const double steer_dead_band_;             //!< @brief dead band for steering angle [rad]
   const double steer_bias_;                  //!< @brief steering angle bias [rad]
+  const double vel_sensor_delay_;
+  const double vel_resolution_;
+  const double vel_noise_stddev_;
   const double debug_acc_scaling_factor_;    //!< @brief scaling factor for accel command
   const double debug_steer_scaling_factor_;  //!< @brief scaling factor for steering command
 
   double prev_brake_cmd_; // ヒステリシス計算用に前回のブレーキ指令値を記憶する変数
+
+  std::deque<double> vel_history_queue_;       // 車速の遅延用バッファ
+  double delayed_vx_;                          // 遅延適用後の物理車速
+  std::mt19937 vel_rng_;                       // 乱数生成器
+  std::normal_distribution<double> vel_dist_;  // 正規分布
 
   /**
    * @brief set queue buffer for input command

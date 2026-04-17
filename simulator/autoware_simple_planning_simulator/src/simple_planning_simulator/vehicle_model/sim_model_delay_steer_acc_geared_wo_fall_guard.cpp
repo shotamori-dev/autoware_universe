@@ -27,6 +27,7 @@ SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   double brake_accuracy_error, double brake_hysteresis_width, double brake_jump_threshold, double brake_jump_value, double brake_resolution,
   double steer_delay,
   double steer_time_constant, double steer_dead_band, double steer_bias,
+  double vel_sensor_delay, double vel_resolution, double vel_noise_stddev, int vel_noise_seed,
   double debug_acc_scaling_factor, double debug_steer_scaling_factor)
 : SimModelInterface(7 /* dim x */, 4 /* dim u */),
   MIN_TIME_CONSTANT(0.03),
@@ -48,9 +49,15 @@ SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   steer_time_constant_(std::max(steer_time_constant, MIN_TIME_CONSTANT)),
   steer_dead_band_(steer_dead_band),
   steer_bias_(steer_bias),
+  vel_sensor_delay_(vel_sensor_delay),
+  vel_resolution_(vel_resolution),
+  vel_noise_stddev_(std::max(vel_noise_stddev, 0.0)),
   debug_acc_scaling_factor_(std::max(debug_acc_scaling_factor, 0.0)),
   debug_steer_scaling_factor_(std::max(debug_steer_scaling_factor, 0.0)),
-  prev_brake_cmd_(0.0) // 初期化
+  prev_brake_cmd_(0.0), // 初期化
+  delayed_vx_(0.0),
+  vel_rng_(vel_noise_seed),
+  vel_dist_(0.0, 1.0)
 {
   initializeInputQueue(dt);
 }
@@ -69,7 +76,20 @@ double SimModelDelaySteerAccGearedWoFallGuard::getYaw()
 }
 double SimModelDelaySteerAccGearedWoFallGuard::getVx()
 {
-  return state_(IDX::VX);
+  // 1. 遅延適用済みの物理車速を取得
+  double vx = delayed_vx_;
+
+  // 2. ホワイトノイズの付与
+  if (vel_noise_stddev_ > 1e-5) {
+    vx += vel_dist_(vel_rng_) * vel_noise_stddev_;
+  }
+
+  // 3. 分解能（丸め）
+  if (vel_resolution_ > 1e-5) {
+    vx = std::round(vx / vel_resolution_) * vel_resolution_;
+  }
+
+  return vx;
 }
 double SimModelDelaySteerAccGearedWoFallGuard::getVy()
 {
@@ -158,6 +178,15 @@ void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
   }
 
   state_(IDX::ACCX) = (state_(IDX::VX) - prev_state(IDX::VX)) / dt;
+
+  // ====== 追加：遅延バッファの更新 ======
+  if (vel_history_queue_.empty()) {
+    delayed_vx_ = state_(IDX::VX);
+  } else {
+    vel_history_queue_.push_back(state_(IDX::VX));
+    delayed_vx_ = vel_history_queue_.front();
+    vel_history_queue_.pop_front();
+  }
 }
 
 void SimModelDelaySteerAccGearedWoFallGuard::initializeInputQueue(const double & dt)
@@ -173,6 +202,10 @@ void SimModelDelaySteerAccGearedWoFallGuard::initializeInputQueue(const double &
   size_t steer_input_queue_size = static_cast<size_t>(round(steer_delay_ / dt));
   steer_input_queue_.resize(steer_input_queue_size);
   std::fill(steer_input_queue_.begin(), steer_input_queue_.end(), 0.0);
+
+  size_t vel_input_queue_size = static_cast<size_t>(std::round(vel_sensor_delay_ / dt));
+  vel_history_queue_.resize(vel_input_queue_size);
+  std::fill(vel_history_queue_.begin(), vel_history_queue_.end(), 0.0);
 }
 
 Eigen::VectorXd SimModelDelaySteerAccGearedWoFallGuard::calcModel(
