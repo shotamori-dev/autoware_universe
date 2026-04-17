@@ -28,7 +28,7 @@ SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   double steer_delay,
   double steer_time_constant, double steer_dead_band, double steer_bias,
   double steer_accuracy_error, double steer_resolution, double steer_hysteresis_width,
-  double vel_sensor_delay, double vel_resolution, double vel_noise_stddev, int vel_noise_seed,
+  double vel_sensor_delay, double vel_sensor_resolution, double vel_sensor_noise_stddev, int vel_sensor_noise_seed,
   double debug_acc_scaling_factor, double debug_steer_scaling_factor)
 : SimModelInterface(7 /* dim x */, 4 /* dim u */),
   MIN_TIME_CONSTANT(0.03),
@@ -54,14 +54,14 @@ SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   steer_resolution_(steer_resolution),
   steer_hysteresis_width_(steer_hysteresis_width),
   vel_sensor_delay_(vel_sensor_delay),
-  vel_resolution_(vel_resolution),
-  vel_noise_stddev_(std::max(vel_noise_stddev, 0.0)),
+  vel_sensor_resolution_(vel_sensor_resolution),
+  vel_sensor_noise_stddev_(std::max(vel_sensor_noise_stddev, 0.0)),
   debug_acc_scaling_factor_(std::max(debug_acc_scaling_factor, 0.0)),
   debug_steer_scaling_factor_(std::max(debug_steer_scaling_factor, 0.0)),
   prev_brake_cmd_(0.0), // 初期化
   prev_steer_cmd_(0.0),
   delayed_vx_(0.0),
-  vel_rng_(vel_noise_seed),
+  vel_rng_(vel_sensor_noise_seed),
   vel_dist_(0.0, 1.0)
 {
   initializeInputQueue(dt);
@@ -85,13 +85,13 @@ double SimModelDelaySteerAccGearedWoFallGuard::getVx()
   double vx = delayed_vx_;
 
   // 2. ホワイトノイズの付与
-  if (vel_noise_stddev_ > 1e-5) {
-    vx += vel_dist_(vel_rng_) * vel_noise_stddev_;
+  if (vel_sensor_noise_stddev_ > 1e-5) {
+    vx += vel_dist_(vel_rng_) * vel_sensor_noise_stddev_;
   }
 
   // 3. 分解能（丸め）
-  if (vel_resolution_ > 1e-5) {
-    vx = std::round(vx / vel_resolution_) * vel_resolution_;
+  if (vel_sensor_resolution_ > 1e-5) {
+    vx = std::round(vx / vel_sensor_resolution_) * vel_sensor_resolution_;
   }
 
   return vx;

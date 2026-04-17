@@ -252,9 +252,9 @@ void SimplePlanningSimulator::initialize_vehicle_model(const std::string & vehic
   const double steer_resolution = declare_parameter("steer_resolution", 0.0);
   const double steer_hysteresis_width = declare_parameter("steer_hysteresis_width", 0.0);
   const double vel_sensor_delay = declare_parameter("vel_sensor_delay", 0.0);
-  const double vel_resolution = declare_parameter("vel_resolution", 0.0);
-  const double vel_noise_stddev = declare_parameter("vel_noise_stddev", 0.0);
-  const int vel_noise_seed = declare_parameter("vel_noise_seed", 42);
+  const double vel_sensor_resolution = declare_parameter("vel_sensor_resolution", 0.0);
+  const double vel_sensor_noise_stddev = declare_parameter("vel_sensor_noise_stddev", 0.0);
+  const int vel_sensor_noise_seed = declare_parameter("vel_sensor_noise_seed", 42);
 
   const double debug_acc_scaling_factor = declare_parameter("debug_acc_scaling_factor", 1.0);
   const double debug_steer_scaling_factor = declare_parameter("debug_steer_scaling_factor", 1.0);
@@ -303,7 +303,7 @@ void SimplePlanningSimulator::initialize_vehicle_model(const std::string & vehic
       brake_accuracy_error, brake_hysteresis_width, brake_jump_threshold, brake_jump_value, brake_resolution,
       steer_time_delay, steer_time_constant, steer_dead_band,
       steer_bias, steer_accuracy_error, steer_resolution, steer_hysteresis_width,
-      vel_sensor_delay, vel_resolution, vel_noise_stddev, vel_noise_seed,
+      vel_sensor_delay, vel_sensor_resolution, vel_sensor_noise_stddev, vel_sensor_noise_seed,
       debug_acc_scaling_factor, debug_steer_scaling_factor);
   } else if (vehicle_model_type_str == "DELAY_STEER_MAP_ACC_GEARED") {
     vehicle_model_type_ = VehicleModelType::DELAY_STEER_MAP_ACC_GEARED;
