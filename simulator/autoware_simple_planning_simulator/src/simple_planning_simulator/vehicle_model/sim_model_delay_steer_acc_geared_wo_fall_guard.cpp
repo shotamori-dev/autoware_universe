@@ -27,6 +27,7 @@ SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   double brake_accuracy_error, double brake_hysteresis_width, double brake_jump_threshold, double brake_jump_value, double brake_resolution,
   double steer_delay,
   double steer_time_constant, double steer_dead_band, double steer_bias,
+  double steer_accuracy_error, double steer_resolution, double steer_hysteresis_width,
   double vel_sensor_delay, double vel_resolution, double vel_noise_stddev, int vel_noise_seed,
   double debug_acc_scaling_factor, double debug_steer_scaling_factor)
 : SimModelInterface(7 /* dim x */, 4 /* dim u */),
@@ -49,12 +50,16 @@ SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   steer_time_constant_(std::max(steer_time_constant, MIN_TIME_CONSTANT)),
   steer_dead_band_(steer_dead_band),
   steer_bias_(steer_bias),
+  steer_accuracy_error_(steer_accuracy_error),
+  steer_resolution_(steer_resolution),
+  steer_hysteresis_width_(steer_hysteresis_width),
   vel_sensor_delay_(vel_sensor_delay),
   vel_resolution_(vel_resolution),
   vel_noise_stddev_(std::max(vel_noise_stddev, 0.0)),
   debug_acc_scaling_factor_(std::max(debug_acc_scaling_factor, 0.0)),
   debug_steer_scaling_factor_(std::max(debug_steer_scaling_factor, 0.0)),
   prev_brake_cmd_(0.0), // 初期化
+  prev_steer_cmd_(0.0),
   delayed_vx_(0.0),
   vel_rng_(vel_noise_seed),
   vel_dist_(0.0, 1.0)
@@ -259,8 +264,30 @@ Eigen::VectorXd SimModelDelaySteerAccGearedWoFallGuard::calcModel(
   // =========================================================================
 
   const double current_tc = (pedal_acc_des < 0.0) ? brake_time_constant_ : acc_time_constant_;
-  const double steer_des =
+  double steer_des =
     sat(input(IDX_U::STEER_DES), steer_lim_, -steer_lim_) * debug_steer_scaling_factor_;
+
+  // ================= 操舵フィルター適用 =================
+  // 1. 精度誤差
+  steer_des *= (1.0 + steer_accuracy_error_);
+
+  // 2. ヒステリシス（ガタ）
+  double steer_hist = steer_des;
+  if (steer_des > prev_steer_cmd_ + 1e-5) {
+    steer_hist = steer_des - (steer_hysteresis_width_ / 2.0); // 右に切り増し時は少し遅れる
+  } else if (steer_des < prev_steer_cmd_ - 1e-5) {
+    steer_hist = steer_des + (steer_hysteresis_width_ / 2.0); // 左に戻し時は少し遅れる
+  }
+  prev_steer_cmd_ = steer_des;
+
+  // 3. 分解能（カクつき）
+  if (steer_resolution_ > 1e-5) {
+    steer_hist = std::round(steer_hist / steer_resolution_) * steer_resolution_;
+  }
+
+  steer_des = steer_hist; // フィルター後の値を再代入
+  // =====================================================
+
   // NOTE: `steer_des` is calculated by control from measured values. getSteer() also gets the
   // measured value. The steer_rate used in the motion calculation is obtained from these
   // differences.

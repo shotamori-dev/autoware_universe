@@ -248,7 +248,9 @@ void SimplePlanningSimulator::initialize_vehicle_model(const std::string & vehic
   const double steer_time_constant = declare_parameter("steer_time_constant", 0.27);
   const double steer_dead_band = declare_parameter("steer_dead_band", 0.0);
   const double steer_bias = declare_parameter("steer_bias", 0.0);
-
+  const double steer_accuracy_error = declare_parameter("steer_accuracy_error", 0.0);
+  const double steer_resolution = declare_parameter("steer_resolution", 0.0);
+  const double steer_hysteresis_width = declare_parameter("steer_hysteresis_width", 0.0);
   const double vel_sensor_delay = declare_parameter("vel_sensor_delay", 0.0);
   const double vel_resolution = declare_parameter("vel_resolution", 0.0);
   const double vel_noise_stddev = declare_parameter("vel_noise_stddev", 0.0);
@@ -300,7 +302,7 @@ void SimplePlanningSimulator::initialize_vehicle_model(const std::string & vehic
       acc_time_delay, brake_time_delay, acc_time_constant, brake_time_constant,
       brake_accuracy_error, brake_hysteresis_width, brake_jump_threshold, brake_jump_value, brake_resolution,
       steer_time_delay, steer_time_constant, steer_dead_band,
-      steer_bias,
+      steer_bias, steer_accuracy_error, steer_resolution, steer_hysteresis_width,
       vel_sensor_delay, vel_resolution, vel_noise_stddev, vel_noise_seed,
       debug_acc_scaling_factor, debug_steer_scaling_factor);
   } else if (vehicle_model_type_str == "DELAY_STEER_MAP_ACC_GEARED") {
