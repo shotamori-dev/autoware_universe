@@ -41,6 +41,11 @@ public:
    * @param [in] brake_delay time delay for brake command [s]
    * @param [in] acc_time_constant time constant for 1D model of accel dynamics
    * @param [in] brake_time_constant time constant for 1D model of brake dynamics
+   * @param [in] brake_accuracy_error accuracy error gain for brake command (e.g. 0.05 for +5%)
+   * @param [in] brake_hysteresis_width hysteresis width for brake command [m/ss]
+   * @param [in] brake_jump_threshold minimum activation threshold (dead band) for brake command [m/ss]
+   * @param [in] brake_jump_value minimum output value when brake is activated [m/ss]
+   * @param [in] brake_resolution resolution (step size) for brake command [m/ss]
    * @param [in] steer_delay time delay for steering command [s]
    * @param [in] steer_time_constant time constant for 1D model of steering dynamics
    * @param [in] steer_dead_band dead band for steering angle [rad]
@@ -50,8 +55,9 @@ public:
    */
   SimModelDelaySteerAccGearedWoFallGuard(
     double vx_lim, double steer_lim, double vx_rate_lim, double steer_rate_lim, double wheelbase,
-    double dt, double acc_delay, double brake_delay, double acc_time_constant, double brake_time_constant, double steer_delay,
-    double steer_time_constant, double steer_dead_band, double steer_bias,
+    double dt, double acc_delay, double brake_delay, double acc_time_constant, double brake_time_constant,
+    double brake_accuracy_error, double brake_hysteresis_width, double brake_jump_threshold, double brake_jump_value, double brake_resolution,
+    double steer_delay, double steer_time_constant, double steer_dead_band, double steer_bias,
     double debug_acc_scaling_factor, double debug_steer_scaling_factor);
 
   /**
@@ -86,12 +92,19 @@ private:
   const double brake_delay_;                 //!< @brief time delay for brake command [s]
   const double acc_time_constant_;           //!< @brief time constant for accel dynamics
   const double brake_time_constant_;         //!< @brief time constant for brake dynamics
+  const double brake_accuracy_error_;
+  const double brake_hysteresis_width_;
+  const double brake_jump_threshold_;
+  const double brake_jump_value_;
+  const double brake_resolution_;
   const double steer_delay_;                 //!< @brief time delay for steering command [s]
   const double steer_time_constant_;         //!< @brief time constant for steering dynamics
   const double steer_dead_band_;             //!< @brief dead band for steering angle [rad]
   const double steer_bias_;                  //!< @brief steering angle bias [rad]
   const double debug_acc_scaling_factor_;    //!< @brief scaling factor for accel command
   const double debug_steer_scaling_factor_;  //!< @brief scaling factor for steering command
+
+  double prev_brake_cmd_; // ヒステリシス計算用に前回のブレーキ指令値を記憶する変数
 
   /**
    * @brief set queue buffer for input command

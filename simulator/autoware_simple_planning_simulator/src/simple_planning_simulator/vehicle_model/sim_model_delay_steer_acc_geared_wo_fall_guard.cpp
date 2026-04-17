@@ -23,7 +23,9 @@ namespace autoware::simulator::simple_planning_simulator
 
 SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   double vx_lim, double steer_lim, double vx_rate_lim, double steer_rate_lim, double wheelbase,
-  double dt, double acc_delay, double brake_delay, double acc_time_constant, double brake_time_constant, double steer_delay,
+  double dt, double acc_delay, double brake_delay, double acc_time_constant, double brake_time_constant,
+  double brake_accuracy_error, double brake_hysteresis_width, double brake_jump_threshold, double brake_jump_value, double brake_resolution,
+  double steer_delay,
   double steer_time_constant, double steer_dead_band, double steer_bias,
   double debug_acc_scaling_factor, double debug_steer_scaling_factor)
 : SimModelInterface(7 /* dim x */, 4 /* dim u */),
@@ -37,12 +39,18 @@ SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   brake_delay_(brake_delay),
   acc_time_constant_(std::max(acc_time_constant, MIN_TIME_CONSTANT)),
   brake_time_constant_(std::max(brake_time_constant, MIN_TIME_CONSTANT)),
+  brake_accuracy_error_(brake_accuracy_error),
+  brake_hysteresis_width_(brake_hysteresis_width),
+  brake_jump_threshold_(brake_jump_threshold),
+  brake_jump_value_(brake_jump_value),
+  brake_resolution_(brake_resolution),
   steer_delay_(steer_delay),
   steer_time_constant_(std::max(steer_time_constant, MIN_TIME_CONSTANT)),
   steer_dead_band_(steer_dead_band),
   steer_bias_(steer_bias),
   debug_acc_scaling_factor_(std::max(debug_acc_scaling_factor, 0.0)),
-  debug_steer_scaling_factor_(std::max(debug_steer_scaling_factor, 0.0))
+  debug_steer_scaling_factor_(std::max(debug_steer_scaling_factor, 0.0)),
+  prev_brake_cmd_(0.0) // 初期化
 {
   initializeInputQueue(dt);
 }
@@ -176,8 +184,47 @@ Eigen::VectorXd SimModelDelaySteerAccGearedWoFallGuard::calcModel(
   const double pedal_acc = sat(state(IDX::PEDAL_ACCX), vx_rate_lim_, -vx_rate_lim_);
   const double yaw = state(IDX::YAW);
   const double steer = state(IDX::STEER);
-  const double pedal_acc_des =
+  double pedal_acc_des =
     sat(input(IDX_U::PEDAL_ACCX_DES), vx_rate_lim_, -vx_rate_lim_) * debug_acc_scaling_factor_;
+
+  // =========================================================================
+  if (pedal_acc_des < 0.0) { // ブレーキ指令の時だけ適用
+    double brake_cmd = std::abs(pedal_acc_des); // 扱いやすいように絶対値（正の値）にする
+
+    // 1. 精度（ゲイン誤差）
+    brake_cmd = brake_cmd * (1.0 + brake_accuracy_error_);
+
+    // 2. ヒステリシス（行きと帰りの差）
+    double hist_cmd = brake_cmd;
+    if (brake_cmd > prev_brake_cmd_ + 1e-5) {
+      hist_cmd = std::max(0.0, brake_cmd - (brake_hysteresis_width_ / 2.0)); // 踏み増し時は効きにくい
+    } else if (brake_cmd < prev_brake_cmd_ - 1e-5) {
+      hist_cmd = brake_cmd + (brake_hysteresis_width_ / 2.0);                // 緩め時は抜けにくい
+    }
+    prev_brake_cmd_ = brake_cmd; // 次回のために記憶
+
+    // 3. ジャンプ（最低作動圧・クラックプレッシャー）
+    double jump_cmd = hist_cmd;
+    if (hist_cmd < brake_jump_threshold_) {
+      jump_cmd = 0.0; // 閾値まではバルブが開かない
+    } else if (hist_cmd < brake_jump_value_) {
+      jump_cmd = brake_jump_value_; // 開いた瞬間、最低でもこのGが出てしまう
+    }
+
+    // 4. 解像度（階段状の効き）
+    double res_cmd = jump_cmd;
+    if (brake_resolution_ > 1e-5) { // ゼロ割れ防止
+      res_cmd = std::round(jump_cmd / brake_resolution_) * brake_resolution_;
+    }
+
+    // 計算したブレーキ力を元のマイナス符号に戻して書き換える
+    pedal_acc_des = -res_cmd;
+  } else {
+    // アクセルの時は、ヒステリシスの記憶をリセットしておく（ブレーキを完全に離した状態）
+    prev_brake_cmd_ = 0.0;
+  }
+  // =========================================================================
+
   const double current_tc = (pedal_acc_des < 0.0) ? brake_time_constant_ : acc_time_constant_;
   const double steer_des =
     sat(input(IDX_U::STEER_DES), steer_lim_, -steer_lim_) * debug_steer_scaling_factor_;
