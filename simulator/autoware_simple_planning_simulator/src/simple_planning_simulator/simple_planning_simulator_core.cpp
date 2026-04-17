@@ -234,7 +234,9 @@ void SimplePlanningSimulator::initialize_vehicle_model(const std::string & vehic
   const double steer_lim = declare_parameter("steer_lim", 1.0);
   const double steer_rate_lim = declare_parameter("steer_rate_lim", 5.0);
   const double acc_time_delay = declare_parameter("acc_time_delay", 0.1);
+  const double brake_time_delay = declare_parameter("brake_time_delay", 0.1);
   const double acc_time_constant = declare_parameter("acc_time_constant", 0.1);
+  const double brake_time_constant = declare_parameter("brake_time_constant", 0.1);
   const double vel_time_delay = declare_parameter("vel_time_delay", 0.25);
   const double vel_time_constant = declare_parameter("vel_time_constant", 0.5);
   const double steer_time_delay = declare_parameter("steer_time_delay", 0.24);
@@ -285,7 +287,7 @@ void SimplePlanningSimulator::initialize_vehicle_model(const std::string & vehic
     vehicle_model_type_ = VehicleModelType::DELAY_STEER_ACC_GEARED_WO_FALL_GUARD;
     vehicle_model_ptr_ = std::make_shared<SimModelDelaySteerAccGearedWoFallGuard>(
       vel_lim, steer_lim, vel_rate_lim, steer_rate_lim, wheelbase, timer_sampling_time_ms_ / 1000.0,
-      acc_time_delay, acc_time_constant, steer_time_delay, steer_time_constant, steer_dead_band,
+      acc_time_delay, brake_time_delay, acc_time_constant, brake_time_constant, steer_time_delay, steer_time_constant, steer_dead_band,
       steer_bias, debug_acc_scaling_factor, debug_steer_scaling_factor);
   } else if (vehicle_model_type_str == "DELAY_STEER_MAP_ACC_GEARED") {
     vehicle_model_type_ = VehicleModelType::DELAY_STEER_MAP_ACC_GEARED;

@@ -38,7 +38,9 @@ public:
    * @param [in] wheelbase vehicle wheelbase length [m]
    * @param [in] dt delta time information to set input buffer for delay
    * @param [in] acc_delay time delay for accel command [s]
+   * @param [in] brake_delay time delay for brake command [s]
    * @param [in] acc_time_constant time constant for 1D model of accel dynamics
+   * @param [in] brake_time_constant time constant for 1D model of brake dynamics
    * @param [in] steer_delay time delay for steering command [s]
    * @param [in] steer_time_constant time constant for 1D model of steering dynamics
    * @param [in] steer_dead_band dead band for steering angle [rad]
@@ -48,7 +50,7 @@ public:
    */
   SimModelDelaySteerAccGearedWoFallGuard(
     double vx_lim, double steer_lim, double vx_rate_lim, double steer_rate_lim, double wheelbase,
-    double dt, double acc_delay, double acc_time_constant, double steer_delay,
+    double dt, double acc_delay, double brake_delay, double acc_time_constant, double brake_time_constant, double steer_delay,
     double steer_time_constant, double steer_dead_band, double steer_bias,
     double debug_acc_scaling_factor, double debug_steer_scaling_factor);
 
@@ -78,9 +80,12 @@ private:
   const double wheelbase_;       //!< @brief vehicle wheelbase length [m]
 
   std::deque<double> acc_input_queue_;       //!< @brief buffer for accel command
+  std::deque<double> brake_input_queue_;     //!< @brief buffer for brake command
   std::deque<double> steer_input_queue_;     //!< @brief buffer for steering command
   const double acc_delay_;                   //!< @brief time delay for accel command [s]
+  const double brake_delay_;                 //!< @brief time delay for brake command [s]
   const double acc_time_constant_;           //!< @brief time constant for accel dynamics
+  const double brake_time_constant_;         //!< @brief time constant for brake dynamics
   const double steer_delay_;                 //!< @brief time delay for steering command [s]
   const double steer_time_constant_;         //!< @brief time constant for steering dynamics
   const double steer_dead_band_;             //!< @brief dead band for steering angle [rad]
