@@ -58,7 +58,7 @@ SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   vel_sensor_noise_stddev_(std::max(vel_sensor_noise_stddev, 0.0)),
   debug_acc_scaling_factor_(std::max(debug_acc_scaling_factor, 0.0)),
   debug_steer_scaling_factor_(std::max(debug_steer_scaling_factor, 0.0)),
-  prev_brake_cmd_(0.0), // 初期化
+  prev_brake_cmd_(0.0),
   prev_steer_cmd_(0.0),
   delayed_vx_(0.0),
   vel_rng_(vel_sensor_noise_seed),
@@ -81,19 +81,13 @@ double SimModelDelaySteerAccGearedWoFallGuard::getYaw()
 }
 double SimModelDelaySteerAccGearedWoFallGuard::getVx()
 {
-  // 1. 遅延適用済みの物理車速を取得
   double vx = delayed_vx_;
-
-  // 2. ホワイトノイズの付与
   if (vel_sensor_noise_stddev_ > 1e-5) {
     vx += vel_dist_(vel_rng_) * vel_sensor_noise_stddev_;
   }
-
-  // 3. 分解能（丸め）
   if (vel_sensor_resolution_ > 1e-5) {
     vx = std::round(vx / vel_sensor_resolution_) * vel_sensor_resolution_;
   }
-
   return vx;
 }
 double SimModelDelaySteerAccGearedWoFallGuard::getVy()
@@ -110,9 +104,9 @@ double SimModelDelaySteerAccGearedWoFallGuard::getWz()
 }
 double SimModelDelaySteerAccGearedWoFallGuard::getSteer()
 {
-  // return measured values with bias added to actual values
   return state_(IDX::STEER) + steer_bias_;
 }
+
 void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
 {
   Eigen::VectorXd delayed_input = Eigen::VectorXd::Zero(dim_u_);
@@ -137,18 +131,70 @@ void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
   delayed_input(IDX_U::GEAR) = input_(IDX_U::GEAR);
   delayed_input(IDX_U::SLOPE_ACCX) = input_(IDX_U::SLOPE_ACCX);
 
+  // =========================================================================
+  // 🌟 非線形フィルタ計算（デジタルの世界）
+  // =========================================================================
+  auto sat = [](double val, double u, double l) { return std::max(std::min(val, u), l); };
+
+  // 1. アクセル・ブレーキ フィルタ
+  double pedal_acc_des = sat(delayed_input(IDX_U::PEDAL_ACCX_DES), vx_rate_lim_, -vx_rate_lim_) * debug_acc_scaling_factor_;
+  if (pedal_acc_des < 0.0) {
+    double brake_cmd = std::abs(pedal_acc_des);
+    brake_cmd = brake_cmd * (1.0 + brake_accuracy_error_);
+
+    double hist_cmd = brake_cmd;
+    if (brake_cmd > prev_brake_cmd_ + 1e-5) {
+      hist_cmd = std::max(0.0, brake_cmd - (brake_hysteresis_width_ / 2.0));
+    } else if (brake_cmd < prev_brake_cmd_ - 1e-5) {
+      hist_cmd = brake_cmd + (brake_hysteresis_width_ / 2.0);
+    }
+    prev_brake_cmd_ = brake_cmd;
+
+    double jump_cmd = hist_cmd;
+    if (hist_cmd < brake_jump_threshold_) {
+      jump_cmd = 0.0;
+    } else if (hist_cmd < brake_jump_value_) {
+      jump_cmd = brake_jump_value_;
+    }
+
+    double res_cmd = jump_cmd;
+    if (brake_resolution_ > 1e-5) {
+      res_cmd = std::round(jump_cmd / brake_resolution_) * brake_resolution_;
+    }
+    pedal_acc_des = -res_cmd;
+  } else {
+    prev_brake_cmd_ = 0.0;
+  }
+  delayed_input(IDX_U::PEDAL_ACCX_DES) = pedal_acc_des;
+
+  // 2. ステアリング フィルタ
+  double steer_des = sat(delayed_input(IDX_U::STEER_DES), steer_lim_, -steer_lim_) * debug_steer_scaling_factor_;
+  steer_des *= (1.0 + steer_accuracy_error_);
+
+  double steer_hist = steer_des;
+  if (steer_des > prev_steer_cmd_ + 1e-5) {
+    steer_hist = steer_des - (steer_hysteresis_width_ / 2.0);
+  } else if (steer_des < prev_steer_cmd_ - 1e-5) {
+    steer_hist = steer_des + (steer_hysteresis_width_ / 2.0);
+  }
+  prev_steer_cmd_ = steer_des;
+
+  if (steer_resolution_ > 1e-5) {
+    steer_hist = std::round(steer_hist / steer_resolution_) * steer_resolution_;
+  }
+  delayed_input(IDX_U::STEER_DES) = steer_hist;
+  // =========================================================================
+
   const auto prev_state = state_;
-  updateEuler(dt, delayed_input);
-  // we cannot use updateRungeKutta() because the differentiability or the continuity condition is
-  // not satisfied, but we can use Runge-Kutta method with code reconstruction.
 
-  // take velocity limit explicitly
+  // 🌟 物理演算を高精度なルンゲ＝クッタ法（RK4）に切り替え
+  updateRungeKutta(dt, delayed_input);
+
+  // 速度制限と停止判定
   state_(IDX::VX) = std::max(-vx_lim_, std::min(state_(IDX::VX), vx_lim_));
-
   if (
     prev_state(IDX::VX) * state_(IDX::VX) <= 0.0 &&
     -state_(IDX::PEDAL_ACCX) >= std::abs(delayed_input(IDX_U::SLOPE_ACCX))) {
-    // stop condition is satisfied
     state_(IDX::VX) = 0.0;
   }
 
@@ -161,7 +207,6 @@ void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
 
   using autoware_vehicle_msgs::msg::GearCommand;
   const auto gear = delayed_input(IDX_U::GEAR);
-
   if (
     gear == GearCommand::DRIVE || gear == GearCommand::DRIVE_2 || gear == GearCommand::DRIVE_3 ||
     gear == GearCommand::DRIVE_4 || gear == GearCommand::DRIVE_5 || gear == GearCommand::DRIVE_6 ||
@@ -171,20 +216,15 @@ void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
     gear == GearCommand::DRIVE_14 || gear == GearCommand::DRIVE_15 ||
     gear == GearCommand::DRIVE_16 || gear == GearCommand::DRIVE_17 ||
     gear == GearCommand::DRIVE_18 || gear == GearCommand::LOW || gear == GearCommand::LOW_2) {
-    if (state_(IDX::VX) < 0.0) { // Dギアなのに後ろに下がろうとしている
-      apply_hsa_stop();
-    }
+    if (state_(IDX::VX) < 0.0) apply_hsa_stop();
   } else if (gear == GearCommand::REVERSE || gear == GearCommand::REVERSE_2) {
-    if (state_(IDX::VX) > 0.0) { // Rギアなのに前に転がろうとしている
-      apply_hsa_stop();
-    }
+    if (state_(IDX::VX) > 0.0) apply_hsa_stop();
   } else if (gear == GearCommand::PARK) {
-    apply_hsa_stop(); // Pギアの時は動かさない
+    apply_hsa_stop();
   }
 
   state_(IDX::ACCX) = (state_(IDX::VX) - prev_state(IDX::VX)) / dt;
 
-  // ====== 追加：遅延バッファの更新 ======
   if (vel_history_queue_.empty()) {
     delayed_vx_ = state_(IDX::VX);
   } else {
@@ -222,76 +262,16 @@ Eigen::VectorXd SimModelDelaySteerAccGearedWoFallGuard::calcModel(
   const double pedal_acc = sat(state(IDX::PEDAL_ACCX), vx_rate_lim_, -vx_rate_lim_);
   const double yaw = state(IDX::YAW);
   const double steer = state(IDX::STEER);
-  double pedal_acc_des =
-    sat(input(IDX_U::PEDAL_ACCX_DES), vx_rate_lim_, -vx_rate_lim_) * debug_acc_scaling_factor_;
 
-  // =========================================================================
-  if (pedal_acc_des < 0.0) { // ブレーキ指令の時だけ適用
-    double brake_cmd = std::abs(pedal_acc_des); // 扱いやすいように絶対値（正の値）にする
-
-    // 1. 精度（ゲイン誤差）
-    brake_cmd = brake_cmd * (1.0 + brake_accuracy_error_);
-
-    // 2. ヒステリシス（行きと帰りの差）
-    double hist_cmd = brake_cmd;
-    if (brake_cmd > prev_brake_cmd_ + 1e-5) {
-      hist_cmd = std::max(0.0, brake_cmd - (brake_hysteresis_width_ / 2.0)); // 踏み増し時は効きにくい
-    } else if (brake_cmd < prev_brake_cmd_ - 1e-5) {
-      hist_cmd = brake_cmd + (brake_hysteresis_width_ / 2.0);                // 緩め時は抜けにくい
-    }
-    prev_brake_cmd_ = brake_cmd; // 次回のために記憶
-
-    // 3. ジャンプ（最低作動圧・クラックプレッシャー）
-    double jump_cmd = hist_cmd;
-    if (hist_cmd < brake_jump_threshold_) {
-      jump_cmd = 0.0; // 閾値まではバルブが開かない
-    } else if (hist_cmd < brake_jump_value_) {
-      jump_cmd = brake_jump_value_; // 開いた瞬間、最低でもこのGが出てしまう
-    }
-
-    // 4. 解像度（階段状の効き）
-    double res_cmd = jump_cmd;
-    if (brake_resolution_ > 1e-5) { // ゼロ割れ防止
-      res_cmd = std::round(jump_cmd / brake_resolution_) * brake_resolution_;
-    }
-
-    // 計算したブレーキ力を元のマイナス符号に戻して書き換える
-    pedal_acc_des = -res_cmd;
-  } else {
-    // アクセルの時は、ヒステリシスの記憶をリセットしておく（ブレーキを完全に離した状態）
-    prev_brake_cmd_ = 0.0;
-  }
-  // =========================================================================
-
+  // 🌟 update()で計算済みの固定指令値を使用
+  const double pedal_acc_des = input(IDX_U::PEDAL_ACCX_DES);
+  const double steer_des = input(IDX_U::STEER_DES);
   const double current_tc = (pedal_acc_des < 0.0) ? brake_time_constant_ : acc_time_constant_;
-  double steer_des =
-    sat(input(IDX_U::STEER_DES), steer_lim_, -steer_lim_) * debug_steer_scaling_factor_;
 
-  // ================= 操舵フィルター適用 =================
-  // 1. 精度誤差
-  steer_des *= (1.0 + steer_accuracy_error_);
+  // 🌟 RK4の中間状態(state)を反映するため直接バイアスを足す
+  const double current_steer_with_bias = state(IDX::STEER) + steer_bias_;
+  const double steer_diff = current_steer_with_bias - steer_des;
 
-  // 2. ヒステリシス（ガタ）
-  double steer_hist = steer_des;
-  if (steer_des > prev_steer_cmd_ + 1e-5) {
-    steer_hist = steer_des - (steer_hysteresis_width_ / 2.0); // 右に切り増し時は少し遅れる
-  } else if (steer_des < prev_steer_cmd_ - 1e-5) {
-    steer_hist = steer_des + (steer_hysteresis_width_ / 2.0); // 左に戻し時は少し遅れる
-  }
-  prev_steer_cmd_ = steer_des;
-
-  // 3. 分解能（カクつき）
-  if (steer_resolution_ > 1e-5) {
-    steer_hist = std::round(steer_hist / steer_resolution_) * steer_resolution_;
-  }
-
-  steer_des = steer_hist; // フィルター後の値を再代入
-  // =====================================================
-
-  // NOTE: `steer_des` is calculated by control from measured values. getSteer() also gets the
-  // measured value. The steer_rate used in the motion calculation is obtained from these
-  // differences.
-  const double steer_diff = getSteer() - steer_des;
   const double steer_diff_with_dead_band = std::invoke([&]() {
     if (steer_diff > steer_dead_band_) {
       return steer_diff - steer_dead_band_;
