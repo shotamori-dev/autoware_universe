@@ -24,7 +24,7 @@ namespace autoware::simulator::simple_planning_simulator
 SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   double vx_lim, double steer_lim, double vx_rate_lim, double steer_rate_lim, double wheelbase,
   double dt, double acc_delay, double brake_delay, double acc_time_constant, double brake_time_constant,
-  double brake_accuracy_error, double brake_hysteresis_width, double brake_jump_threshold, double brake_jump_value, double brake_resolution,
+  double brake_accuracy_error, double brake_hysteresis_width, double brake_dead_band, double brake_jump_value, double brake_resolution,
   double steer_delay,
   double steer_time_constant, double steer_dead_band, double steer_bias,
   double steer_accuracy_error, double steer_resolution, double steer_hysteresis_width,
@@ -43,7 +43,7 @@ SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   brake_time_constant_(std::max(brake_time_constant, MIN_TIME_CONSTANT)),
   brake_accuracy_error_(brake_accuracy_error),
   brake_hysteresis_width_(brake_hysteresis_width),
-  brake_jump_threshold_(brake_jump_threshold),
+  brake_dead_band_(brake_dead_band),
   brake_jump_value_(brake_jump_value),
   brake_resolution_(brake_resolution),
   steer_delay_(steer_delay),
@@ -153,7 +153,7 @@ void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
     prev_brake_cmd_ = brake_cmd;
 
     double jump_cmd = hist_cmd;
-    if (hist_cmd < brake_jump_threshold_) {
+    if (hist_cmd < brake_dead_band_) {
       jump_cmd = 0.0;
     } else if (hist_cmd < brake_jump_value_) {
       jump_cmd = brake_jump_value_;
