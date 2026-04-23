@@ -239,6 +239,7 @@ void SimplePlanningSimulator::initialize_vehicle_model(const std::string & vehic
   const double brake_time_constant = declare_parameter("brake_time_constant", 0.1);
   const double brake_accuracy_error = declare_parameter("brake_accuracy_error", 0.0);
   const double brake_hysteresis_width = declare_parameter("brake_hysteresis_width", 0.0);
+  const double acc_dead_band = declare_parameter("acc_dead_band", 0.0);
   const double brake_dead_band = declare_parameter("brake_dead_band", 0.0);
   const double brake_jump_value = declare_parameter("brake_jump_value", 0.0);
   const double brake_resolution = declare_parameter("brake_resolution", 0.0);
@@ -301,7 +302,7 @@ void SimplePlanningSimulator::initialize_vehicle_model(const std::string & vehic
     vehicle_model_ptr_ = std::make_shared<SimModelDelaySteerAccGearedWoFallGuard>(
       vel_lim, steer_lim, vel_rate_lim, steer_rate_lim, wheelbase, timer_sampling_time_ms_ / 1000.0,
       acc_time_delay, brake_time_delay, acc_time_constant, brake_time_constant,
-      brake_accuracy_error, brake_hysteresis_width, brake_dead_band, brake_jump_value, brake_resolution,
+      brake_accuracy_error, brake_hysteresis_width, acc_dead_band, brake_dead_band, brake_jump_value, brake_resolution,
       steer_time_delay, steer_time_constant, steer_dead_band,
       steer_bias, steer_accuracy_error, steer_resolution, steer_hysteresis_width,
       vel_sensor_delay, vel_sensor_resolution, vel_sensor_noise_stddev, vel_sensor_noise_seed, vel_sensor_offset,
