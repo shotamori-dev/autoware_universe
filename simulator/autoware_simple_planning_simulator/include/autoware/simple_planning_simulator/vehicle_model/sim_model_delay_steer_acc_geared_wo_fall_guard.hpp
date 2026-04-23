@@ -33,8 +33,11 @@ class SimModelDelaySteerAccGearedWoFallGuard : public SimModelInterface
 public:
   /**
    * @param [in] vx_lim velocity limit [m/s]
+   * @param [in] acc_lim maximum acceleration limit [m/ss]
+   * @param [in] brake_lim maximum deceleration limit [m/ss]
+   * @param [in] acc_rate_lim acceleration jerk limit [m/s^3]
+   * @param [in] brake_rate_lim deceleration jerk limit [m/s^3]
    * @param [in] steer_lim steering limit [rad]
-   * @param [in] vx_rate_lim acceleration limit [m/ss]
    * @param [in] steer_rate_lim steering angular velocity limit [rad/ss]
    * @param [in] wheelbase vehicle wheelbase length [m]
    * @param [in] dt delta time information to set input buffer for delay
@@ -68,7 +71,7 @@ public:
    * @param [in] debug_steer_scaling_factor scaling factor for steering command
    */
   SimModelDelaySteerAccGearedWoFallGuard(
-    double vx_lim, double steer_lim, double vx_rate_lim, double steer_rate_lim, double wheelbase,
+    double vx_lim, double acc_lim, double brake_lim, double acc_rate_lim, double brake_rate_lim, double steer_lim, double steer_rate_lim, double wheelbase,
     double dt, double acc_delay, double brake_delay, double acc_time_constant, double brake_time_constant,
     double acc_accuracy_error, double brake_accuracy_error, double brake_hysteresis_width, double acc_dead_band, double brake_dead_band, double brake_jump_value, double acc_offset, double brake_offset, double acc_resolution, double brake_resolution,
     double steer_delay, double steer_time_constant, double steer_dead_band, double steer_bias,
@@ -96,7 +99,10 @@ private:
   enum IDX_U { PEDAL_ACCX_DES = 0, GEAR, SLOPE_ACCX, STEER_DES };
 
   const double vx_lim_;          //!< @brief velocity limit [m/s]
-  const double vx_rate_lim_;     //!< @brief acceleration limit [m/ss]
+  const double acc_lim_;
+  const double brake_lim_;
+  const double acc_rate_lim_;
+  const double brake_rate_lim_;
   const double steer_lim_;       //!< @brief steering limit [rad]
   const double steer_rate_lim_;  //!< @brief steering angular velocity limit [rad/s]
   const double wheelbase_;       //!< @brief vehicle wheelbase length [m]

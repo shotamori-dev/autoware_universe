@@ -22,7 +22,7 @@ namespace autoware::simulator::simple_planning_simulator
 {
 
 SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
-  double vx_lim, double steer_lim, double vx_rate_lim, double steer_rate_lim, double wheelbase,
+  double vx_lim, double acc_lim, double brake_lim, double acc_rate_lim, double brake_rate_lim, double steer_lim, double steer_rate_lim, double wheelbase,
   double dt, double acc_delay, double brake_delay, double acc_time_constant, double brake_time_constant,
   double acc_accuracy_error, double brake_accuracy_error, double brake_hysteresis_width, double acc_dead_band, double brake_dead_band, double brake_jump_value, double acc_offset, double brake_offset, double acc_resolution, double brake_resolution,
   double steer_delay,
@@ -33,7 +33,10 @@ SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
 : SimModelInterface(7 /* dim x */, 4 /* dim u */),
   MIN_TIME_CONSTANT(0.03),
   vx_lim_(vx_lim),
-  vx_rate_lim_(vx_rate_lim),
+  acc_lim_(acc_lim),
+  brake_lim_(brake_lim),
+  acc_rate_lim_(acc_rate_lim),
+  brake_rate_lim_(brake_rate_lim),
   steer_lim_(steer_lim),
   steer_rate_lim_(steer_rate_lim),
   wheelbase_(wheelbase),
@@ -144,7 +147,7 @@ void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
   auto sat = [](double val, double u, double l) { return std::max(std::min(val, u), l); };
 
   // 1. アクセル・ブレーキ フィルタ
-  double pedal_acc_des = sat(delayed_input(IDX_U::PEDAL_ACCX_DES), vx_rate_lim_, -vx_rate_lim_) * debug_acc_scaling_factor_;
+  double pedal_acc_des = sat(delayed_input(IDX_U::PEDAL_ACCX_DES), acc_lim_, -brake_lim_) * debug_acc_scaling_factor_;
   if (pedal_acc_des < 0.0) {
     double brake_cmd = std::abs(pedal_acc_des);
     brake_cmd = brake_cmd * (1.0 + brake_accuracy_error_);
@@ -215,6 +218,9 @@ void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
 
   // 速度制限と停止判定
   state_(IDX::VX) = std::max(-vx_lim_, std::min(state_(IDX::VX), vx_lim_));
+
+  state_(IDX::STEER) = sat(state_(IDX::STEER), steer_lim_, -steer_lim_);
+  state_(IDX::PEDAL_ACCX) = sat(state_(IDX::PEDAL_ACCX), acc_lim_, -brake_lim_);
   if (
     prev_state(IDX::VX) * state_(IDX::VX) <= 0.0 &&
     -state_(IDX::PEDAL_ACCX) >= std::abs(delayed_input(IDX_U::SLOPE_ACCX))) {
@@ -282,7 +288,7 @@ Eigen::VectorXd SimModelDelaySteerAccGearedWoFallGuard::calcModel(
   auto sat = [](double val, double u, double l) { return std::max(std::min(val, u), l); };
 
   const double vel = sat(state(IDX::VX), vx_lim_, -vx_lim_);
-  const double pedal_acc = sat(state(IDX::PEDAL_ACCX), vx_rate_lim_, -vx_rate_lim_);
+  const double pedal_acc = sat(state(IDX::PEDAL_ACCX), acc_lim_, -brake_lim_);
   const double yaw = state(IDX::YAW);
   const double steer = state(IDX::STEER);
 
@@ -290,6 +296,7 @@ Eigen::VectorXd SimModelDelaySteerAccGearedWoFallGuard::calcModel(
   const double pedal_acc_des = input(IDX_U::PEDAL_ACCX_DES);
   const double steer_des = input(IDX_U::STEER_DES);
   const double current_tc = (pedal_acc_des < 0.0) ? brake_time_constant_ : acc_time_constant_;
+  const double current_jerk_lim = (pedal_acc_des < 0.0) ? brake_rate_lim_ : acc_rate_lim_;
 
   // 🌟 RK4の中間状態(state)を反映するため直接バイアスを足す
   const double current_steer_with_bias = state(IDX::STEER) + steer_bias_;
@@ -337,8 +344,12 @@ Eigen::VectorXd SimModelDelaySteerAccGearedWoFallGuard::calcModel(
       }
     }
   }();
+
+  const double raw_acc_rate = -(pedal_acc - pedal_acc_des) / current_tc;
+  const double pedal_acc_rate = sat(raw_acc_rate, current_jerk_lim, -current_jerk_lim);
+
   d_state(IDX::STEER) = steer_rate;
-  d_state(IDX::PEDAL_ACCX) = -(pedal_acc - pedal_acc_des) / current_tc;
+  d_state(IDX::PEDAL_ACCX) = pedal_acc_rate;
 
   return d_state;
 }
