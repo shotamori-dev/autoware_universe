@@ -28,7 +28,7 @@ SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   double steer_delay,
   double steer_time_constant, double steer_dead_band, double steer_bias,
   double steer_accuracy_error, double steer_resolution, double steer_hysteresis_width,
-  double vel_sensor_delay, double vel_sensor_resolution, double vel_sensor_noise_stddev, int vel_sensor_noise_seed,
+  double vel_sensor_delay, double vel_sensor_resolution, double vel_sensor_noise_stddev, int vel_sensor_noise_seed, double vel_sensor_offset,
   double debug_acc_scaling_factor, double debug_steer_scaling_factor)
 : SimModelInterface(7 /* dim x */, 4 /* dim u */),
   MIN_TIME_CONSTANT(0.03),
@@ -56,6 +56,7 @@ SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   vel_sensor_delay_(vel_sensor_delay),
   vel_sensor_resolution_(vel_sensor_resolution),
   vel_sensor_noise_stddev_(std::max(vel_sensor_noise_stddev, 0.0)),
+  vel_sensor_offset_(vel_sensor_offset),
   debug_acc_scaling_factor_(std::max(debug_acc_scaling_factor, 0.0)),
   debug_steer_scaling_factor_(std::max(debug_steer_scaling_factor, 0.0)),
   prev_brake_cmd_(0.0),
@@ -82,6 +83,7 @@ double SimModelDelaySteerAccGearedWoFallGuard::getYaw()
 double SimModelDelaySteerAccGearedWoFallGuard::getVx()
 {
   double vx = delayed_vx_;
+  vx += vel_sensor_offset_;
   if (vel_sensor_noise_stddev_ > 1e-5) {
     vx += vel_dist_(vel_rng_) * vel_sensor_noise_stddev_;
   }

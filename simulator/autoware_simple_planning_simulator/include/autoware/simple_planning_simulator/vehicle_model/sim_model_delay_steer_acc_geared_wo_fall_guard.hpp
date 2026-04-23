@@ -58,6 +58,7 @@ public:
    * @param [in] vel_sensor_resolution resolution (step size) for velocity sensor [m/s]
    * @param [in] vel_sensor_noise_stddev standard deviation of velocity sensor noise [m/s]
    * @param [in] vel_sensor_noise_seed random seed for velocity sensor noise to ensure reproducibility
+   * @param [in] vel_sensor_offset constant offset for velocity sensor [m/s]
    * @param [in] debug_acc_scaling_factor scaling factor for accel command
    * @param [in] debug_steer_scaling_factor scaling factor for steering command
    */
@@ -67,7 +68,7 @@ public:
     double brake_accuracy_error, double brake_hysteresis_width, double brake_jump_threshold, double brake_jump_value, double brake_resolution,
     double steer_delay, double steer_time_constant, double steer_dead_band, double steer_bias,
     double steer_accuracy_error, double steer_resolution, double steer_hysteresis_width,
-    double vel_sensor_delay, double vel_sensor_resolution, double vel_sensor_noise_stddev, int vel_sensor_noise_seed,
+    double vel_sensor_delay, double vel_sensor_resolution, double vel_sensor_noise_stddev, int vel_sensor_noise_seed, double vel_sensor_offset,
     double debug_acc_scaling_factor, double debug_steer_scaling_factor);
 
   /**
@@ -117,6 +118,7 @@ private:
   const double vel_sensor_delay_;
   const double vel_sensor_resolution_;
   const double vel_sensor_noise_stddev_;
+  const double vel_sensor_offset_;
   const double debug_acc_scaling_factor_;    //!< @brief scaling factor for accel command
   const double debug_steer_scaling_factor_;  //!< @brief scaling factor for steering command
 
