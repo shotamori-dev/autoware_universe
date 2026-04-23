@@ -42,6 +42,7 @@ public:
    * @param [in] brake_delay time delay for brake command [s]
    * @param [in] acc_time_constant time constant for 1D model of accel dynamics
    * @param [in] brake_time_constant time constant for 1D model of brake dynamics
+   * @param [in] acc_accuracy_error accuracy error gain for acc command (e.g. 0.05 for +5%)
    * @param [in] brake_accuracy_error accuracy error gain for brake command (e.g. 0.05 for +5%)
    * @param [in] brake_hysteresis_width hysteresis width for brake command [m/ss]
    * @param [in] acc_dead_band dead band for acc [m/ss]
@@ -49,6 +50,7 @@ public:
    * @param [in] brake_jump_value minimum output value when brake is activated [m/ss]
    * @param [in] acc_offset constant offset for acc [m/ss]
    * @param [in] brake_offset constant offset for brake [m/ss]
+   * @param [in] acc_resolution resolution (step size) for acc command [m/ss]
    * @param [in] brake_resolution resolution (step size) for brake command [m/ss]
    * @param [in] steer_delay time delay for steering command [s]
    * @param [in] steer_time_constant time constant for 1D model of steering dynamics
@@ -68,7 +70,7 @@ public:
   SimModelDelaySteerAccGearedWoFallGuard(
     double vx_lim, double steer_lim, double vx_rate_lim, double steer_rate_lim, double wheelbase,
     double dt, double acc_delay, double brake_delay, double acc_time_constant, double brake_time_constant,
-    double brake_accuracy_error, double brake_hysteresis_width, double acc_dead_band, double brake_dead_band, double brake_jump_value, double acc_offset, double brake_offset, double brake_resolution,
+    double acc_accuracy_error, double brake_accuracy_error, double brake_hysteresis_width, double acc_dead_band, double brake_dead_band, double brake_jump_value, double acc_offset, double brake_offset, double acc_resolution, double brake_resolution,
     double steer_delay, double steer_time_constant, double steer_dead_band, double steer_bias,
     double steer_accuracy_error, double steer_resolution, double steer_hysteresis_width,
     double vel_sensor_delay, double vel_sensor_resolution, double vel_sensor_noise_stddev, int vel_sensor_noise_seed, double vel_sensor_offset,
@@ -106,6 +108,7 @@ private:
   const double brake_delay_;                 //!< @brief time delay for brake command [s]
   const double acc_time_constant_;           //!< @brief time constant for accel dynamics
   const double brake_time_constant_;         //!< @brief time constant for brake dynamics
+  const double acc_accuracy_error_;
   const double brake_accuracy_error_;
   const double brake_hysteresis_width_;
   const double acc_dead_band_;
@@ -113,6 +116,7 @@ private:
   const double brake_jump_value_;
   const double acc_offset_;
   const double brake_offset_;
+  const double acc_resolution_;
   const double brake_resolution_;
   const double steer_delay_;                 //!< @brief time delay for steering command [s]
   const double steer_time_constant_;         //!< @brief time constant for steering dynamics

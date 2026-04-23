@@ -24,7 +24,7 @@ namespace autoware::simulator::simple_planning_simulator
 SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   double vx_lim, double steer_lim, double vx_rate_lim, double steer_rate_lim, double wheelbase,
   double dt, double acc_delay, double brake_delay, double acc_time_constant, double brake_time_constant,
-  double brake_accuracy_error, double brake_hysteresis_width, double acc_dead_band, double brake_dead_band, double brake_jump_value, double acc_offset, double brake_offset, double brake_resolution,
+  double acc_accuracy_error, double brake_accuracy_error, double brake_hysteresis_width, double acc_dead_band, double brake_dead_band, double brake_jump_value, double acc_offset, double brake_offset, double acc_resolution, double brake_resolution,
   double steer_delay,
   double steer_time_constant, double steer_dead_band, double steer_bias,
   double steer_accuracy_error, double steer_resolution, double steer_hysteresis_width,
@@ -41,6 +41,7 @@ SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   brake_delay_(brake_delay),
   acc_time_constant_(std::max(acc_time_constant, MIN_TIME_CONSTANT)),
   brake_time_constant_(std::max(brake_time_constant, MIN_TIME_CONSTANT)),
+  acc_accuracy_error_(acc_accuracy_error),
   brake_accuracy_error_(brake_accuracy_error),
   brake_hysteresis_width_(brake_hysteresis_width),
   acc_dead_band_(acc_dead_band),
@@ -48,6 +49,7 @@ SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   brake_jump_value_(brake_jump_value),
   acc_offset_(acc_offset),
   brake_offset_(brake_offset),
+  acc_resolution_(acc_resolution),
   brake_resolution_(brake_resolution),
   steer_delay_(steer_delay),
   steer_time_constant_(std::max(steer_time_constant, MIN_TIME_CONSTANT)),
@@ -172,10 +174,16 @@ void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
   } else {
     prev_brake_cmd_ = 0.0;
 
+    pedal_acc_des = pedal_acc_des * (1.0 + acc_accuracy_error_);
+
     if (pedal_acc_des > acc_dead_band_) {
       pedal_acc_des = pedal_acc_des - acc_dead_band_;
     } else {
       pedal_acc_des = 0.0;
+    }
+
+    if (acc_resolution_ > 1e-5) {
+      pedal_acc_des = std::round(pedal_acc_des / acc_resolution_) * acc_resolution_;
     }
 
     pedal_acc_des = pedal_acc_des + acc_offset_;
