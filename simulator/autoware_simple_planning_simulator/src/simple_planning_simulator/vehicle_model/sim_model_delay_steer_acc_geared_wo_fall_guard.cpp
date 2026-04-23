@@ -24,7 +24,7 @@ namespace autoware::simulator::simple_planning_simulator
 SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   double vx_lim, double steer_lim, double vx_rate_lim, double steer_rate_lim, double wheelbase,
   double dt, double acc_delay, double brake_delay, double acc_time_constant, double brake_time_constant,
-  double brake_accuracy_error, double brake_hysteresis_width, double acc_dead_band, double brake_dead_band, double brake_jump_value, double brake_resolution,
+  double brake_accuracy_error, double brake_hysteresis_width, double acc_dead_band, double brake_dead_band, double brake_jump_value, double acc_offset, double brake_offset, double brake_resolution,
   double steer_delay,
   double steer_time_constant, double steer_dead_band, double steer_bias,
   double steer_accuracy_error, double steer_resolution, double steer_hysteresis_width,
@@ -46,6 +46,8 @@ SimModelDelaySteerAccGearedWoFallGuard::SimModelDelaySteerAccGearedWoFallGuard(
   acc_dead_band_(acc_dead_band),
   brake_dead_band_(brake_dead_band),
   brake_jump_value_(brake_jump_value),
+  acc_offset_(acc_offset),
+  brake_offset_(brake_offset),
   brake_resolution_(brake_resolution),
   steer_delay_(steer_delay),
   steer_time_constant_(std::max(steer_time_constant, MIN_TIME_CONSTANT)),
@@ -165,6 +167,8 @@ void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
       res_cmd = std::round(jump_cmd / brake_resolution_) * brake_resolution_;
     }
     pedal_acc_des = -res_cmd;
+
+    pedal_acc_des = pedal_acc_des - brake_offset_;
   } else {
     prev_brake_cmd_ = 0.0;
 
@@ -173,6 +177,8 @@ void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
     } else {
       pedal_acc_des = 0.0;
     }
+
+    pedal_acc_des = pedal_acc_des + acc_offset_;
   }
   delayed_input(IDX_U::PEDAL_ACCX_DES) = pedal_acc_des;
 
