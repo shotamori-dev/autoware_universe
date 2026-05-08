@@ -162,11 +162,13 @@ void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
     }
     prev_brake_cmd_ = brake_cmd;
 
-    double jump_cmd = hist_cmd;
-    if (hist_cmd < brake_dead_band_) {
-      jump_cmd = 0.0;
-    } else if (hist_cmd < brake_jump_value_) {
-      jump_cmd = brake_jump_value_;
+    double jump_cmd = 0.0;
+    if (hist_cmd > brake_dead_band_) {
+      // 空振りした分（不感帯）を引き算して捨てる（アクセルと同じ処理！）
+      double deadzoned_cmd = hist_cmd - brake_dead_band_;
+
+      // パッドが触れた瞬間の反力（Jump）を足して出力とする
+      jump_cmd = deadzoned_cmd + brake_jump_value_;
     }
 
     double res_cmd = jump_cmd;
@@ -342,7 +344,12 @@ Eigen::VectorXd SimModelDelaySteerAccGearedWoFallGuard::calcModel(
       } else if (-pedal_acc >= std::abs(input(IDX_U::SLOPE_ACCX))) {
         return 0.0;
       } else {
-        return input(IDX_U::SLOPE_ACCX);
+        // ブレーキが負けて転がり落ちる場合でも、ブレーキ力(pedal_acc < 0)を抵抗として計算する
+        if (input(IDX_U::SLOPE_ACCX) > 0.0) {
+          return input(IDX_U::SLOPE_ACCX) + pedal_acc;
+        } else {
+          return input(IDX_U::SLOPE_ACCX) - pedal_acc;
+        }
       }
     }
   }();
