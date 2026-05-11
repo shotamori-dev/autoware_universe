@@ -162,18 +162,16 @@ void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
     }
     prev_brake_cmd_ = brake_cmd;
 
-    double jump_cmd = 0.0;
+    double res_cmd = 0.0;
     if (hist_cmd > brake_dead_band_) {
-      // 空振りした分（不感帯）を引き算して捨てる（アクセルと同じ処理！）
+      // 空振りした分（不感帯）を引き算して捨てる
       double deadzoned_cmd = hist_cmd - brake_dead_band_;
-
-      // パッドが触れた瞬間の反力（Jump）を足して出力とする
-      jump_cmd = deadzoned_cmd + brake_jump_value_;
+      // ★Jumpは目標値には足さない！純粋な踏み込み量だけを伝達する
+      res_cmd = deadzoned_cmd;
     }
 
-    double res_cmd = jump_cmd;
     if (brake_resolution_ > 1e-5) {
-      res_cmd = std::round(jump_cmd / brake_resolution_) * brake_resolution_;
+      res_cmd = std::round(res_cmd / brake_resolution_) * brake_resolution_;
     }
     pedal_acc_des = -res_cmd;
 
@@ -213,6 +211,24 @@ void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
     steer_hist = std::round(steer_hist / steer_resolution_) * steer_resolution_;
   }
   delayed_input(IDX_U::STEER_DES) = steer_hist;
+  // =========================================================================
+
+  // =========================================================================
+  // 🌟 現実的なブレーキショック（Jump）の注入（フィルタバイパス）
+  // =========================================================================
+  // 今回の目標値がブレーキ側（負）であり、かつ、
+  // 前回はブレーキが効いていなかった（または目標値がゼロだった）場合を「パッド接触の瞬間」とみなす
+  if (delayed_input(IDX_U::PEDAL_ACCX_DES) < -1e-5) {
+    // 実際にパッドがローターを噛むには、ペダルが死点を越えた瞬間である必要がある
+    // ここでは、実加速度がまだ十分にマイナス（制動）になっていない時を狙う
+    if (state_(IDX::PEDAL_ACCX) > -brake_jump_value_ / 2.0) {
+        // パッドが当たった瞬間の反力（Jump）を、実加速度（状態）に直接減算する
+        // ※フィルタを通さないため、物理的に正しい「ガツン」というGが発生する
+        state_(IDX::PEDAL_ACCX) -= brake_jump_value_;
+        // 念のため、最大ブレーキ限界を超えないようクリップ
+        state_(IDX::PEDAL_ACCX) = std::max(state_(IDX::PEDAL_ACCX), -brake_lim_);
+    }
+  }
   // =========================================================================
 
   const auto prev_state = state_;
