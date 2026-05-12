@@ -162,14 +162,18 @@ void SimModelDelaySteerAccGearedWoFallGuard::update(const double & dt)
     }
     prev_brake_cmd_ = brake_cmd;
 
-    double res_cmd = 0.0;
+    double jump_cmd = 0.0;
     if (hist_cmd > brake_dead_band_) {
-      // 空振りした分（不感帯）を引き算して捨てる
-      res_cmd = hist_cmd - brake_dead_band_;
+      // 空振りした分（不感帯）を引き算して捨てる（アクセルと同じ処理！）
+      double deadzoned_cmd = hist_cmd - brake_dead_band_;
+
+      // パッドが触れた瞬間の反力（Jump）を足して出力とする
+      jump_cmd = deadzoned_cmd + brake_jump_value_;
     }
 
+    double res_cmd = jump_cmd;
     if (brake_resolution_ > 1e-5) {
-      res_cmd = std::round(res_cmd / brake_resolution_) * brake_resolution_;
+      res_cmd = std::round(jump_cmd / brake_resolution_) * brake_resolution_;
     }
     pedal_acc_des = -res_cmd;
 
@@ -289,14 +293,6 @@ Eigen::VectorXd SimModelDelaySteerAccGearedWoFallGuard::calcModel(
 
   const double vel = sat(state(IDX::VX), vx_lim_, -vx_lim_);
   const double pedal_acc = sat(state(IDX::PEDAL_ACCX), acc_lim_, -brake_lim_);
-
-  // 🌟 ここを追加：フィルタ後の値にJumpを足した「物理的なブレーキ力」を作る
-  double physical_acc = pedal_acc;
-  if (pedal_acc < -1e-3) {
-      physical_acc -= brake_jump_value_;
-  }
-  physical_acc = sat(physical_acc, acc_lim_, -brake_lim_);
-
   const double yaw = state(IDX::YAW);
   const double steer = state(IDX::STEER);
 
@@ -342,16 +338,17 @@ Eigen::VectorXd SimModelDelaySteerAccGearedWoFallGuard::calcModel(
       }
     } else {
       if (vel > 0.0) {
-        return physical_acc + input(IDX_U::SLOPE_ACCX);
+        return pedal_acc + input(IDX_U::SLOPE_ACCX);
       } else if (vel < 0.0) {
-        return -physical_acc + input(IDX_U::SLOPE_ACCX);
-      } else if (-physical_acc >= std::abs(input(IDX_U::SLOPE_ACCX))) {
+        return -pedal_acc + input(IDX_U::SLOPE_ACCX);
+      } else if (-pedal_acc >= std::abs(input(IDX_U::SLOPE_ACCX))) {
         return 0.0;
       } else {
+        // ブレーキが負けて転がり落ちる場合でも、ブレーキ力(pedal_acc < 0)を抵抗として計算する
         if (input(IDX_U::SLOPE_ACCX) > 0.0) {
-          return input(IDX_U::SLOPE_ACCX) + physical_acc;
+          return input(IDX_U::SLOPE_ACCX) + pedal_acc;
         } else {
-          return input(IDX_U::SLOPE_ACCX) - physical_acc;
+          return input(IDX_U::SLOPE_ACCX) - pedal_acc;
         }
       }
     }
