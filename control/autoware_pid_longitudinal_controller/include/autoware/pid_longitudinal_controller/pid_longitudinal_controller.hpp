@@ -171,6 +171,7 @@ private:
   double m_time_threshold_before_pid_integrate;
   bool m_enable_brake_keeping_before_stop;
   double m_brake_keeping_acc;
+  double m_brake_keeping_stop_dist;
 
   // smooth stop
   SmoothStop m_smooth_stop;
@@ -378,7 +379,7 @@ private:
    * @param [in] motion delay compensated target motion
    */
   Motion keepBrakeBeforeStop(
-    const ControlData & control_data, const Motion & target_motion, const size_t nearest_idx) const;
+    const ControlData & control_data, const Motion & target_motion) const;
 
   /**
    * @brief interpolate trajectory point that is nearest to vehicle
