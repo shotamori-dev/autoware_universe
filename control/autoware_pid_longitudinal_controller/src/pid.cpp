@@ -15,6 +15,7 @@
 #include "autoware/pid_longitudinal_controller/pid.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -45,8 +46,18 @@ double PIDController::calculate(
   ret_p = std::min(std::max(ret_p, p.min_ret_p), p.max_ret_p);
 
   if (enable_integration) {
-    m_error_integral += error * dt;
-    m_error_integral = std::min(std::max(m_error_integral, p.min_ret_i / p.ki), p.max_ret_i / p.ki);
+    // Integrator Separation: Suspend I-term accumulation during transient states where the P-term effort exceeds the I-term limits.
+    const double p_effort = p.kp * error;
+    const bool is_transient = (p_effort > p.max_ret_i) || (p_effort < p.min_ret_i);
+
+    // Integral Deadband: Suspend I-term accumulation when the velocity error is extremely small to prevent unwanted integration caused by noise.
+    const bool in_deadband = (std::abs(error) < 0.01);
+
+    // Accumulate the I-term only in the linear region near the target value.
+    if (!is_transient && !in_deadband) {
+      m_error_integral += error * dt;
+      m_error_integral = std::min(std::max(m_error_integral, p.min_ret_i / p.ki), p.max_ret_i / p.ki);
+    }
   }
   const double ret_i = p.ki * m_error_integral;
 
