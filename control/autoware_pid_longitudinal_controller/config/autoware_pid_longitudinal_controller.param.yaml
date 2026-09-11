@@ -35,8 +35,6 @@
     time_threshold_before_pid_integration: 2.0
     enable_brake_keeping_before_stop: false
     brake_keeping_acc: -0.2
-    brake_keeping_stop_dist: 1.0
-    brake_keeping_target_vel_th: 0.2
 
     # smooth stop state
     smooth_stop_max_strong_acc: -0.5

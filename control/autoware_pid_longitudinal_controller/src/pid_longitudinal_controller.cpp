@@ -116,8 +116,6 @@ PidLongitudinalController::PidLongitudinalController(
     m_enable_brake_keeping_before_stop =
       node.declare_parameter<bool>("enable_brake_keeping_before_stop");         // [-]
     m_brake_keeping_acc = node.declare_parameter<double>("brake_keeping_acc");  // [m/s^2]
-    m_brake_keeping_stop_dist = node.declare_parameter<double>("brake_keeping_stop_dist", 1.0); // [m]
-    m_brake_keeping_target_vel_th = node.declare_parameter<double>("brake_keeping_target_vel_th", 0.2); // [m/s]
   }
 
   // parameters for smooth stop state
@@ -323,8 +321,6 @@ rcl_interfaces::msg::SetParametersResult PidLongitudinalController::paramCallbac
 
     update_param("current_vel_threshold_pid_integration", m_current_vel_threshold_pid_integrate);
     update_param("time_threshold_before_pid_integration", m_time_threshold_before_pid_integrate);
-    update_param("brake_keeping_stop_dist", m_brake_keeping_stop_dist);
-    update_param("brake_keeping_target_vel_th", m_brake_keeping_target_vel_th);
   }
 
   // stopping state
@@ -836,7 +832,7 @@ PidLongitudinalController::Motion PidLongitudinalController::calcCtrlCmd(
         raw_ctrl_cmd.vel = control_data.interpolated_traj.points.at(control_data.target_idx)
                              .longitudinal_velocity_mps;
         raw_ctrl_cmd.acc = applyVelocityFeedback(control_data);
-        raw_ctrl_cmd = keepBrakeBeforeStop(control_data, raw_ctrl_cmd);
+        raw_ctrl_cmd = keepBrakeBeforeStop(control_data, raw_ctrl_cmd, target_idx);
 
         RCLCPP_DEBUG(
           logger_,
@@ -1024,37 +1020,34 @@ double PidLongitudinalController::applySlopeCompensation(
 }
 
 PidLongitudinalController::Motion PidLongitudinalController::keepBrakeBeforeStop(
-  const ControlData & control_data, const Motion & target_motion) const
+  const ControlData & control_data, const Motion & target_motion, const size_t nearest_idx) const
 {
   Motion output_motion = target_motion;
-  if (!m_enable_brake_keeping_before_stop) {
+
+  if (m_enable_brake_keeping_before_stop == false) {
+    return output_motion;
+  }
+  const auto traj = control_data.interpolated_traj;
+
+  const auto stop_idx = autoware::motion_utils::searchZeroVelocityIndex(traj.points);
+  if (!stop_idx) {
     return output_motion;
   }
 
-  bool is_stopping_in_horizon = false;
-  double accumulated_dist = 0.0;
-  const auto & points = control_data.interpolated_traj.points;
-
-  for (size_t i = control_data.nearest_idx; i < points.size(); ++i) {
-    if (std::abs(points.at(i).longitudinal_velocity_mps) < m_brake_keeping_target_vel_th) {
-      is_stopping_in_horizon = true;
+  double min_acc_before_stop = std::numeric_limits<double>::max();
+  size_t min_acc_idx = std::numeric_limits<size_t>::max();
+  for (int i = static_cast<int>(*stop_idx); i >= 0; --i) {
+    const auto ui = static_cast<size_t>(i);
+    if (traj.points.at(ui).acceleration_mps2 > static_cast<float>(min_acc_before_stop)) {
       break;
     }
-
-    if (i == points.size() - 1) {
-      break;
-    }
-
-    accumulated_dist += autoware_utils::calc_distance3d(
-      points.at(i).pose.position, points.at(i+1).pose.position);
-
-    if (accumulated_dist > m_brake_keeping_stop_dist) {
-      break;
-    }
+    min_acc_before_stop = traj.points.at(ui).acceleration_mps2;
+    min_acc_idx = ui;
   }
 
-  if (is_stopping_in_horizon && target_motion.acc > m_brake_keeping_acc) {
-    output_motion.acc = m_brake_keeping_acc;
+  const double brake_keeping_acc = std::max(m_brake_keeping_acc, min_acc_before_stop);
+  if (nearest_idx >= min_acc_idx && target_motion.acc > brake_keeping_acc) {
+    output_motion.acc = brake_keeping_acc;
   }
 
   return output_motion;
