@@ -99,6 +99,44 @@ TEST(PostprocessingUtilsTest, FixStopPointsResetsDecelerationDuration)
   EXPECT_DOUBLE_EQ(trajectory.points.back().pose.position.x, 4.0);
 }
 
+TEST(PostprocessingUtilsTest, FixStopPointsToleratesBriefNonDeceleration)
+{
+  Trajectory trajectory;
+  // 3.0-second trajectory with 0.1s resolution (30 points)
+  for (size_t i = 0; i < 30; ++i) {
+    auto & point = trajectory.points.emplace_back();
+    const double time = 0.1 * static_cast<double>(i);
+    point.time_from_start.sec = static_cast<int32_t>(time);
+    point.time_from_start.nanosec = static_cast<uint32_t>((time - std::floor(time)) * 1.0e9);
+    point.pose.position.x = static_cast<double>(i);
+
+    if (i >= 20 && i <= 21) {
+      // Noise (0.2s duration)
+      point.acceleration_mps2 = 0.0F;
+      point.longitudinal_velocity_mps = 0.4F;
+    } else {
+      // Normal deceleration
+      point.acceleration_mps2 = -1.0F;
+      // Velocity drops below the threshold (0.3) only at index 22 and later
+      point.longitudinal_velocity_mps = (i >= 22) ? 0.2F : 0.4F;
+    }
+  }
+
+  postprocess::StopPointFixingParams params;
+  params.velocity_threshold_mps = 0.3;
+  params.min_deceleration_duration_sec = 1.0;
+
+  // 1. Without tolerance (0.0s): Deceleration duration is reset by the noise, so the stop point is not fixed
+  params.max_tolerated_non_deceleration_duration_sec = 0.0;
+  EXPECT_FALSE(postprocess::fix_stop_points(trajectory, params).has_value());
+
+  // 2. With tolerance (0.2s): Deceleration state is maintained through the noise, fixing the stop point at index 22
+  params.max_tolerated_non_deceleration_duration_sec = 0.2;
+  const auto stop_index = postprocess::fix_stop_points(trajectory, params);
+  ASSERT_TRUE(stop_index.has_value());
+  EXPECT_EQ(*stop_index, 22U);
+}
+
 namespace
 {
 // Ego poses on the model output grid, laid out along +x at the given positions.

@@ -269,6 +269,9 @@ void MLPlanner::set_up_params()
     this->declare_parameter<double>("stop_point_fixing.velocity_threshold_mps", 0.3);
   stop_fixing.min_deceleration_duration_sec =
     this->declare_parameter<double>("stop_point_fixing.min_deceleration_duration_sec", 1.0);
+  stop_fixing.max_tolerated_non_deceleration_duration_sec =
+    this->declare_parameter<double>(
+      "stop_point_fixing.max_tolerated_non_deceleration_duration_sec", 0.0);
 
   // planning factor params
   planning_factor_params_.enable_stop =
@@ -432,6 +435,9 @@ SetParametersResult MLPlanner::on_parameter(const std::vector<rclcpp::Parameter>
   update_param<double>(
     parameters, "stop_point_fixing.min_deceleration_duration_sec",
     stop_fixing.min_deceleration_duration_sec);
+  update_param<double>(
+    parameters, "stop_point_fixing.max_tolerated_non_deceleration_duration_sec",
+    stop_fixing.max_tolerated_non_deceleration_duration_sec);
 
   update_param<bool>(
     parameters, "planning_factor.enable_stop", new_planning_factor_params.enable_stop);
@@ -547,7 +553,10 @@ SetParametersResult MLPlanner::on_parameter(const std::vector<rclcpp::Parameter>
     return failure(
       "road border avoidance distances must be non-negative and shift_step_m positive");
   }
-  if (stop_fixing.velocity_threshold_mps < 0.0 || stop_fixing.min_deceleration_duration_sec < 0.0) {
+  if (
+    stop_fixing.velocity_threshold_mps < 0.0 ||
+    stop_fixing.min_deceleration_duration_sec < 0.0 ||
+    stop_fixing.max_tolerated_non_deceleration_duration_sec < 0.0) {
     return failure("stop point fixing thresholds must be non-negative");
   }
 

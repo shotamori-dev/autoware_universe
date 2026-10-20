@@ -335,6 +335,12 @@
               "default": 1.0,
               "minimum": 0.0,
               "description": "Minimum continuous deceleration duration required before fixing the stop point [s]"
+            },
+            "max_tolerated_non_deceleration_duration_sec": {
+              "type": "number",
+              "default": 0.0,
+              "minimum": 0.0,
+              "description": "Maximum tolerated duration of non-decelerating points during deceleration [s]"
             }
           },
           "required": ["enable"]

@@ -111,6 +111,7 @@ struct StopPointFixingParams
   bool enable{false};
   double velocity_threshold_mps{0.3};
   double min_deceleration_duration_sec{1.0};
+  double max_tolerated_non_deceleration_duration_sec{0.0};
 };
 
 /**

@@ -262,14 +262,32 @@ std::optional<size_t> fix_stop_points(Trajectory & trajectory, const StopPointFi
   auto & points = trajectory.points;
   auto stop_it = points.end();
   auto deceleration_start_it = points.end();
+  auto last_deceleration_it = points.end();
+  constexpr double k_time_epsilon = 1e-6;
   for (auto it = points.begin(); it != points.end(); ++it) {
-    if (it->acceleration_mps2 >= -0.01F) {
-      deceleration_start_it = points.end();
-      continue;
-    }
+    const bool is_decelerating = (it->acceleration_mps2 < -0.01F);
 
-    if (deceleration_start_it == points.end()) {
-      deceleration_start_it = it;
+    if (is_decelerating) {
+      if (deceleration_start_it == points.end()) {
+        deceleration_start_it = it;
+      }
+      last_deceleration_it = it;
+    } else {
+      if (deceleration_start_it != points.end()) {
+        const auto & last_decel_time = last_deceleration_it->time_from_start;
+        const auto & current_time = it->time_from_start;
+        const double non_decel_duration =
+          static_cast<double>(current_time.sec - last_decel_time.sec) +
+          1.0e-9 * static_cast<double>(
+                     static_cast<int64_t>(current_time.nanosec) -
+                     static_cast<int64_t>(last_decel_time.nanosec));
+
+        if (non_decel_duration > params.max_tolerated_non_deceleration_duration_sec + k_time_epsilon) {
+          deceleration_start_it = points.end();
+          last_deceleration_it = points.end();
+        }
+      }
+      continue; // Skip since a non-decelerating point cannot be a stop point
     }
     const auto & start_time = deceleration_start_it->time_from_start;
     const auto & current_time = it->time_from_start;
